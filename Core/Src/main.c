@@ -22,6 +22,7 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
+#include "mcb.h"
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
@@ -46,43 +47,16 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-typedef struct {
-    uint8_t AIR_POS_cmd_isActive : 1;
-    uint8_t AIR_POS_isClosed : 1;
-    uint8_t AIR_NEG_cmd_isActive : 1;
-    uint8_t AIR_NEG_isClosed : 1;
-    uint8_t DCBUS_PRECH_RLY_cmd_isActive : 1;
-    uint8_t DCBUS_PRECH_RLY_isClosed : 1;
-    uint8_t AMS_errIsActive : 1;
-    uint8_t IMD_errIsActive : 1;
-    uint8_t TSAL_green_isActive : 1;
-    uint8_t DCBUS_isOver60V : 1;
-    uint8_t IMP_any_isActive : 1;
-    uint8_t IMP_HV_Relays_Signals_isActive : 1;
-    uint8_t IMP_AIRS_Signals_isActive : 1;
-    uint8_t AIR_POS_STG_mechStateSignal_isActive : 1;
-    uint8_t AIR_NEG_STG_mechStateSignal_isActive : 1;
-} CAN_MessageTypeDef; //each field takes up 1 bit to pack them later
-
-CAN_MessageTypeDef canMessage; //to declare the struct globally
-
-void InitializeCANMessage(void){
-  canMessage.AIR_POS_cmd_isActive = 0;
-  canMessage.AIR_POS_isClosed = 0;
-  canMessage.AIR_NEG_cmd_isActive = 0;
-  canMessage.AIR_NEG_isClosed = 0;
-  canMessage.DCBUS_PRECH_RLY_cmd_isActive = 0;
-  canMessage.DCBUS_PRECH_RLY_isClosed = 0;
-  canMessage.AMS_errIsActive = 0;
-  canMessage.IMD_errIsActive = 0;
-  canMessage.TSAL_green_isActive = 1;  //only TSAL green light is active
-  canMessage.DCBUS_isOver60V = 0;
-  canMessage.IMP_any_isActive = 0;
-  canMessage.IMP_HV_Relays_Signals_isActive = 0;
-  canMessage.IMP_AIRS_Signals_isActive = 0;
-  canMessage.AIR_POS_STG_mechStateSignal_isActive = 0;
-  canMessage.AIR_NEG_STG_mechStateSignal_isActive = 0;
-}
+CAN_TxHeaderTypeDef TxHeader;
+uint32_t TxMailbox;
+uint8_t buffer_tx[8];
+uint8_t buffer_rx[8];
+volatile bool can_rx_flag =0;//flag to check if message was received
+double static air_neg_cmd_is_active = 0, air_neg_is_closed = 0, air_neg_stg_mech_state_signal_is_active = 0,
+                  air_pos_cmd_is_active = 0, air_pos_is_closed = 0, air_pos_stg_mech_state_signal_is_active = 0,
+                  ams_err_is_active = 0, dcbus_is_over60_v = 0, dcbus_prech_rly_cmd_is_active = 0,
+                  dcbus_prech_rly_is_closed = 0, imd_err_is_active = 0, imp_dcbus_is_active = 0, imp_any_is_active = 0,
+                  imp_hv_relays_signals_is_active = 0, tsal_green_is_active = 1;
 
 
 /* USER CODE END PV */
@@ -131,7 +105,6 @@ int main(void)
   MX_TIM2_Init();
   MX_USART2_UART_Init();
   /* USER CODE BEGIN 2 */
-  InitializeCANMessage();
 
   HAL_TIM_Base_Start_IT(&htim2);
 
@@ -195,68 +168,69 @@ void SystemClock_Config(void)
 }
 
 /* USER CODE BEGIN 4 */
-uint32_t PackCANMessage(CAN_MessageTypeDef* message) {
-  uint32_t packedData = 0; //now let's left shift every single bit individually
-  packedData |= (message->AIR_POS_cmd_isActive) << 0;
-  packedData |= (message->AIR_POS_isClosed) << 1;
-  packedData |= (message->AIR_NEG_cmd_isActive) << 2;
-  packedData |= (message->AIR_NEG_isClosed) << 3;
-  packedData |= (message->DCBUS_PRECH_RLY_cmd_isActive) << 4;
-  packedData |= (message->DCBUS_PRECH_RLY_isClosed) << 5;
-  packedData |= (message->AMS_errIsActive) << 6;
-  packedData |= (message->IMD_errIsActive) << 7;
-  packedData |= (message->TSAL_green_isActive) << 8;
-  packedData |= (message->DCBUS_isOver60V) << 9;
-  packedData |= (message->IMP_any_isActive) << 10;
-  packedData |= (message->IMP_HV_Relays_Signals_isActive) << 11;
-  packedData |= (message->IMP_AIRS_Signals_isActive) << 12;
-  packedData |= (message->AIR_POS_STG_mechStateSignal_isActive) << 13;
-  packedData |= (message->AIR_NEG_STG_mechStateSignal_isActive) << 14;
-
-  return packedData;
-}
 
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   if(htim->Instance==TIM2){
-    uint32_t packedData=PackCANMessage(&canMessage);//we packed the canMessage
+    struct mcb_tlb_bat_signals_status_t static tlb_signals;
+    mcb_tlb_bat_signals_status_init(&tlb_signals);
 
-    uint8_t dataPerByte[4]; //contains 4 bytes of 8 bits each
-    dataPerByte[0] = (uint8_t)(packedData & 0xFF);//LSB because little-endian
-    dataPerByte[1] = (uint8_t)((packedData >> 8) & 0xFF);
-    dataPerByte[2] = (uint8_t)((packedData >> 16) & 0xFF);
-    dataPerByte[3] = (uint8_t)((packedData >> 24) & 0xFF); //MSB 
-    //dataPerByte=0x00000100
+    tlb_signals.air_neg_cmd_is_active = mcb_tlb_bat_signals_status_air_neg_cmd_is_active_encode(air_neg_cmd_is_active);
+    tlb_signals.air_neg_is_closed     = mcb_tlb_bat_signals_status_air_neg_is_closed_encode(air_neg_is_closed);
+    tlb_signals.air_neg_stg_mech_state_signal_is_active =mcb_tlb_bat_signals_status_air_neg_stg_mech_state_signal_is_active_encode(air_neg_stg_mech_state_signal_is_active);
+    tlb_signals.air_pos_cmd_is_active = mcb_tlb_bat_signals_status_air_pos_cmd_is_active_encode(air_pos_cmd_is_active);
+    tlb_signals.air_pos_is_closed     = mcb_tlb_bat_signals_status_air_pos_is_closed_encode(air_pos_is_closed);
+    tlb_signals.air_pos_stg_mech_state_signal_is_active =mcb_tlb_bat_signals_status_air_pos_stg_mech_state_signal_is_active_encode(air_pos_stg_mech_state_signal_is_active);
+    tlb_signals.ams_err_is_active = mcb_tlb_bat_signals_status_ams_err_is_active_encode(ams_err_is_active);
+    tlb_signals.dcbus_is_over60_v = mcb_tlb_bat_signals_status_dcbus_is_over60_v_encode(dcbus_is_over60_v);
+    tlb_signals.dcbus_prech_rly_cmd_is_active =mcb_tlb_bat_signals_status_dcbus_prech_rly_cmd_is_active_encode(dcbus_prech_rly_cmd_is_active);
+    tlb_signals.dcbus_prech_rly_is_closed =mcb_tlb_bat_signals_status_dcbus_prech_rly_is_closed_encode(dcbus_prech_rly_is_closed);
+    tlb_signals.tsal_green_is_active = mcb_tlb_bat_signals_status_tsal_green_is_active_encode(tsal_green_is_active);
+    tlb_signals.imd_err_is_active = mcb_tlb_bat_signals_status_imd_err_is_active_encode(imd_err_is_active);
+    tlb_signals.imp_any_is_active = mcb_tlb_bat_signals_status_imp_any_is_active_encode(imp_any_is_active);
+    tlb_signals.imp_dcbus_is_active =mcb_tlb_bat_signals_status_imp_dcbus_is_active_encode(imp_dcbus_is_active);
+    //tlb_signals.imp_hv_relays_signals_is_active =mcb_tlb_bat_signals_status_imp_hv_relays_signals_is_active_encode(imp_hv_relays_signals_is_active);
+    
 
-    uint32_t TxMailbox;
-    CAN_TxHeaderTypeDef TxHeader;
-    TxHeader.DLC=4;//size in bytes
-    TxHeader.IDE=CAN_ID_STD;
-    TxHeader.RTR=CAN_RTR_DATA;
-    TxHeader.StdId=0x4; //msg ID
+    mcb_tlb_bat_signals_status_pack(buffer_tx,&tlb_signals,MCB_TLB_BAT_SIGNALS_STATUS_LENGTH);  
+    TxHeader.DLC=sizeof(buffer_tx);
+    TxHeader.StdId=MCB_TLB_BAT_SIGNALS_STATUS_FRAME_ID;
 
-    if (HAL_CAN_AddTxMessage(&hcan1, &TxHeader, dataPerByte, &TxMailbox) != HAL_OK) {
-      
-      Error_Handler();
-    }
+    can_send(&hcan1,buffer_tx,&TxHeader,CAN_TX_MAILBOX0) != HAL_OK;            
+
   }
 }
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
+  if(hcan->Instance== CAN1){
     CAN_RxHeaderTypeDef RxHeader;
-    uint8_t receivedData[4]; // Buffer to store received data (4 bytes)
+    if (HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&RxHeader,buffer_rx)==HAL_OK){
+      if(RxHeader.StdId=MCB_TLB_BAT_SIGNALS_STATUS_FRAME_ID && RxHeader.DLC ==MCB_TLB_BAT_SIGNALS_STATUS_LENGTH){
+        struct mcb_tlb_bat_signals_status_t tlb_signals_rx;
+        if(mcb_tlb_bat_signals_status_unpack(&tlb_signals_rx,&buffer_rx,RxHeader.DLC)==0){
+          double air_pos_cmd_is_active = mcb_tlb_bat_signals_status_air_pos_cmd_is_active_decode(tlb_signals_rx.air_pos_cmd_is_active);
+          double air_pos_is_closed = mcb_tlb_bat_signals_status_air_pos_is_closed_decode(tlb_signals_rx.air_pos_is_closed);
+          double air_neg_cmd_is_active = mcb_tlb_bat_signals_status_air_neg_cmd_is_active_decode(tlb_signals_rx.air_neg_cmd_is_active);
+          double air_neg_is_closed = mcb_tlb_bat_signals_status_air_neg_is_closed_decode(tlb_signals_rx.air_neg_is_closed);
+          double dcbus_prech_rly_cmd_is_active = mcb_tlb_bat_signals_status_dcbus_prech_rly_cmd_is_active_decode(tlb_signals_rx.dcbus_prech_rly_cmd_is_active);
+          double dcbus_prech_rly_is_closed = mcb_tlb_bat_signals_status_dcbus_prech_rly_is_closed_decode(tlb_signals_rx.dcbus_prech_rly_is_closed);
+          double ams_err_is_active = mcb_tlb_bat_signals_status_ams_err_is_active_decode(tlb_signals_rx.ams_err_is_active);
+          double imd_err_is_active = mcb_tlb_bat_signals_status_imd_err_is_active_decode(tlb_signals_rx.imd_err_is_active);
+          double tsal_green_is_active = mcb_tlb_bat_signals_status_tsal_green_is_active_decode(tlb_signals_rx.tsal_green_is_active);
+          double dcbus_is_over60_v = mcb_tlb_bat_signals_status_dcbus_is_over60_v_decode(tlb_signals_rx.dcbus_is_over60_v);
+          double imp_any_is_active = mcb_tlb_bat_signals_status_imp_any_is_active_decode(tlb_signals_rx.imp_any_is_active);
+          double imp_hv_relays_state_is_active = mcb_tlb_bat_signals_status_imp_hv_relays_state_is_active_decode(tlb_signals_rx.imp_hv_relays_state_is_active);
+          double air_pos_stg_mech_state_signal_is_active = mcb_tlb_bat_signals_status_air_pos_stg_mech_state_signal_is_active_decode(tlb_signals_rx.air_pos_stg_mech_state_signal_is_active);
+          double air_neg_stg_mech_state_signal_is_active = mcb_tlb_bat_signals_status_air_neg_stg_mech_state_signal_is_active_decode(tlb_signals_rx.air_neg_stg_mech_state_signal_is_active);
+          double imp_dcbus_is_active= mcb_tlb_bat_signals_status_imp_ai_rs_signals_is_active_decode(tlb_signals_rx.imp_dcbus_is_active);
+          
 
-    // Read the received message
-    if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, receivedData) == HAL_OK) {
-        // Check if the received message ID matches what you sent
-        if (RxHeader.StdId == 0x4 && RxHeader.DLC == 4) {
-            // reverse it because it's in little endian
-            uint32_t receivedPackedData = (receivedData[3] << 24) | (receivedData[2] << 16) | (receivedData[1] << 8) | receivedData[0];
-
-            // Print to check the receivedPackedData
-            char msg[50];
-            sprintf(msg, "Received: 0x%08lX\r\n", receivedPackedData);
-            HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+        //uart for debugging:
+        char msg[256];
+        //HAL_UART_Transmit_IT();
         }
+      }
     }
+
+  }
 }
 
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *);

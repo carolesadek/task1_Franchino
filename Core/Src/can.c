@@ -1,21 +1,21 @@
 /* USER CODE BEGIN Header */
 /**
-  ******************************************************************************
-  * @file    can.c
-  * @brief   This file provides code for the configuration
-  *          of the CAN instances.
-  ******************************************************************************
-  * @attention
-  *
-  * Copyright (c) 2024 STMicroelectronics.
-  * All rights reserved.
-  *
-  * This software is licensed under terms that can be found in the LICENSE file
-  * in the root directory of this software component.
-  * If no LICENSE file comes with this software, it is provided AS-IS.
-  *
-  ******************************************************************************
-  */
+ ******************************************************************************
+ * @file    can.c
+ * @brief   This file provides code for the configuration
+ *          of the CAN instances.
+ ******************************************************************************
+ * @attention
+ *
+ * Copyright (c) 2024 STMicroelectronics.
+ * All rights reserved.
+ *
+ * This software is licensed under terms that can be found in the LICENSE file
+ * in the root directory of this software component.
+ * If no LICENSE file comes with this software, it is provided AS-IS.
+ *
+ ******************************************************************************
+ */
 /* USER CODE END Header */
 /* Includes ------------------------------------------------------------------*/
 #include "can.h"
@@ -54,28 +54,45 @@ void MX_CAN1_Init(void)
     Error_Handler();
   }
   /* USER CODE BEGIN CAN1_Init 2 */
-  HAL_CAN_ActivateNotification(&hcan1,
-    CAN_IT_RX_FIFO0_MSG_PENDING |
-    CAN_IT_ERROR_WARNING |
-    CAN_IT_ERROR_PASSIVE |
-    CAN_IT_BUSOFF |
-    CAN_IT_LAST_ERROR_CODE |
-    CAN_IT_ERROR
-  );
+  CAN_FilterTypeDef sFilterConfig;
+
+  // Configure filter for CAN1
+  sFilterConfig.FilterActivation = CAN_FILTER_ENABLE;
+  sFilterConfig.FilterBank = 0; // Filter bank to use (0 in this case)
+  sFilterConfig.FilterFIFOAssignment = CAN_FILTER_FIFO0;
+  sFilterConfig.FilterIdHigh = (0x41 << 5);
+  sFilterConfig.FilterIdLow = 0x0000;
+  sFilterConfig.FilterMaskIdHigh = (0xFFFF << 5);
+  sFilterConfig.FilterMaskIdLow = 0x0000;
+  sFilterConfig.FilterMode = CAN_FILTERMODE_IDMASK;
+  sFilterConfig.FilterScale = CAN_FILTERSCALE_16BIT;
+
+  // Apply the filter configuration
+  if (HAL_CAN_ConfigFilter(&hcan1, &sFilterConfig) != HAL_OK)
+  {
+    // Handle filter configuration error
+    Error_Handler();
+  }
+
+  HAL_CAN_ActivateNotification(&hcan1,CAN_IT_RX_FIFO0_MSG_PENDING |
+                                   CAN_IT_ERROR_WARNING |
+                                   CAN_IT_ERROR_PASSIVE |
+                                   CAN_IT_BUSOFF |
+                                   CAN_IT_LAST_ERROR_CODE |
+                                   CAN_IT_ERROR);
   HAL_CAN_Start(&hcan1);
   /* USER CODE END CAN1_Init 2 */
-
 }
 
-void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
+void HAL_CAN_MspInit(CAN_HandleTypeDef *canHandle)
 {
 
   GPIO_InitTypeDef GPIO_InitStruct = {0};
-  if(canHandle->Instance==CAN1)
+  if (canHandle->Instance == CAN1)
   {
-  /* USER CODE BEGIN CAN1_MspInit 0 */
+    /* USER CODE BEGIN CAN1_MspInit 0 */
 
-  /* USER CODE END CAN1_MspInit 0 */
+    /* USER CODE END CAN1_MspInit 0 */
     /* CAN1 clock enable */
     __HAL_RCC_CAN1_CLK_ENABLE();
 
@@ -84,7 +101,7 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     PA11     ------> CAN1_RX
     PA12     ------> CAN1_TX
     */
-    GPIO_InitStruct.Pin = GPIO_PIN_11|GPIO_PIN_12;
+    GPIO_InitStruct.Pin = GPIO_PIN_11 | GPIO_PIN_12;
     GPIO_InitStruct.Mode = GPIO_MODE_AF_PP;
     GPIO_InitStruct.Pull = GPIO_NOPULL;
     GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_VERY_HIGH;
@@ -100,20 +117,20 @@ void HAL_CAN_MspInit(CAN_HandleTypeDef* canHandle)
     HAL_NVIC_EnableIRQ(CAN1_RX1_IRQn);
     HAL_NVIC_SetPriority(CAN1_SCE_IRQn, 0, 0);
     HAL_NVIC_EnableIRQ(CAN1_SCE_IRQn);
-  /* USER CODE BEGIN CAN1_MspInit 1 */
+    /* USER CODE BEGIN CAN1_MspInit 1 */
 
-  /* USER CODE END CAN1_MspInit 1 */
+    /* USER CODE END CAN1_MspInit 1 */
   }
 }
 
-void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
+void HAL_CAN_MspDeInit(CAN_HandleTypeDef *canHandle)
 {
 
-  if(canHandle->Instance==CAN1)
+  if (canHandle->Instance == CAN1)
   {
-  /* USER CODE BEGIN CAN1_MspDeInit 0 */
+    /* USER CODE BEGIN CAN1_MspDeInit 0 */
 
-  /* USER CODE END CAN1_MspDeInit 0 */
+    /* USER CODE END CAN1_MspDeInit 0 */
     /* Peripheral clock disable */
     __HAL_RCC_CAN1_CLK_DISABLE();
 
@@ -121,19 +138,40 @@ void HAL_CAN_MspDeInit(CAN_HandleTypeDef* canHandle)
     PA11     ------> CAN1_RX
     PA12     ------> CAN1_TX
     */
-    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11|GPIO_PIN_12);
+    HAL_GPIO_DeInit(GPIOA, GPIO_PIN_11 | GPIO_PIN_12);
 
     /* CAN1 interrupt Deinit */
     HAL_NVIC_DisableIRQ(CAN1_TX_IRQn);
     HAL_NVIC_DisableIRQ(CAN1_RX0_IRQn);
     HAL_NVIC_DisableIRQ(CAN1_RX1_IRQn);
     HAL_NVIC_DisableIRQ(CAN1_SCE_IRQn);
-  /* USER CODE BEGIN CAN1_MspDeInit 1 */
+    /* USER CODE BEGIN CAN1_MspDeInit 1 */
 
-  /* USER CODE END CAN1_MspDeInit 1 */
+    /* USER CODE END CAN1_MspDeInit 1 */
   }
 }
 
 /* USER CODE BEGIN 1 */
+
+// wait for the CAN Tx to be ready
+HAL_StatusTypeDef can_wait(CAN_HandleTypeDef *hcan, uint8_t timeout)
+{
+  uint32_t tick = HAL_GetTick();
+  while (HAL_CAN_GetTxMailboxesFreeLevel(hcan) == 0)
+  {
+    if (HAL_GetTick() - tick > timeout)
+      return HAL_TIMEOUT;
+  }
+  return HAL_OK;
+}
+
+// send messages on the CAN bus
+HAL_StatusTypeDef can_send(CAN_HandleTypeDef *hcan, uint8_t *buffer, CAN_TxHeaderTypeDef *header, uint32_t mailbox)
+{
+  if (can_wait(hcan, 1) != HAL_OK)
+    return HAL_TIMEOUT;
+
+  return HAL_CAN_AddTxMessage(hcan, header, buffer, &mailbox);
+}
 
 /* USER CODE END 1 */

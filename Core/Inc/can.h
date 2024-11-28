@@ -41,6 +41,8 @@ extern CAN_HandleTypeDef hcan1;
 void MX_CAN1_Init(void);
 
 /* USER CODE BEGIN Prototypes */
+HAL_StatusTypeDef can_send(CAN_HandleTypeDef *hcan, uint8_t *buffer, CAN_TxHeaderTypeDef *header, uint32_t mailbox);
+HAL_StatusTypeDef can_wait(CAN_HandleTypeDef *hcan, uint8_t timeout);
 
 /* USER CODE END Prototypes */
 
