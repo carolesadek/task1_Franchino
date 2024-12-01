@@ -36,6 +36,7 @@ BUILD_DIR = build
 ######################################
 # C sources
 C_SOURCES =  \
+SCan/SC24/artifacts/MCB/c_source/Src/mcb.c \
 Core/Src/main.c \
 Core/Src/stm32f4xx_it.c \
 Core/Src/stm32f4xx_hal_msp.c \
@@ -122,6 +123,7 @@ AS_INCLUDES =
 
 # C includes
 C_INCLUDES =  \
+-ISCan/SC24/artifacts/MCB/c_source/Inc \
 -ICore/Inc \
 -IDrivers/STM32F4xx_HAL_Driver/Inc \
 -IDrivers/STM32F4xx_HAL_Driver/Inc/Legacy \
@@ -189,7 +191,25 @@ $(BUILD_DIR)/%.bin: $(BUILD_DIR)/%.elf | $(BUILD_DIR)
 	$(BIN) $< $@	
 	
 $(BUILD_DIR):
-	mkdir $@		
+	mkdir $@
+
+#######################################
+# custom makefile rules
+#######################################
+
+# The openocd bin path can be either defined in make command via OPENOCD_PATH variable (> make OPENOCD_PATH=xxx)
+# either it can be added to the PATH environment variable.
+ifdef OPENOCD_PATH
+OPENOCD = "$(OPENOCD_PATH)/openocd"
+else
+OPENOCD = "openocd"
+endif
+
+#######################################
+# flash
+#######################################
+flash: openocd.cfg $(BUILD_DIR)/$(TARGET).elf
+	$(OPENOCD) -f ./openocd.cfg -c "program $(BUILD_DIR)/$(TARGET).elf verify reset exit"
 
 #######################################
 # clean up
@@ -202,4 +222,4 @@ clean:
 #######################################
 -include $(wildcard $(BUILD_DIR)/*.d)
 
-# *** EOF ***
+# *** EOF ***make 

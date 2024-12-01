@@ -22,10 +22,9 @@
 #include "tim.h"
 #include "usart.h"
 #include "gpio.h"
-#include "mcb.h"
-
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
+#include "mcb.h"
 
 /* USER CODE END Includes */
 
@@ -49,14 +48,13 @@
 /* USER CODE BEGIN PV */
 CAN_TxHeaderTypeDef TxHeader;
 uint32_t TxMailbox;
-uint8_t buffer_tx[8];
-uint8_t buffer_rx[8];
-volatile bool can_rx_flag =0;//flag to check if message was received
-double static air_neg_cmd_is_active = 0, air_neg_is_closed = 0, air_neg_stg_mech_state_signal_is_active = 0,
-                  air_pos_cmd_is_active = 0, air_pos_is_closed = 0, air_pos_stg_mech_state_signal_is_active = 0,
-                  ams_err_is_active = 0, dcbus_is_over60_v = 0, dcbus_prech_rly_cmd_is_active = 0,
-                  dcbus_prech_rly_is_closed = 0, imd_err_is_active = 0, imp_dcbus_is_active = 0, imp_any_is_active = 0,
-                  imp_hv_relays_signals_is_active = 0, tsal_green_is_active = 1;
+uint8_t buffer_tx[8]={0};
+uint8_t buffer_rx[8]={0};
+double static air_neg_cmd_is_active = 0.0, air_neg_is_closed = 0.0, air_neg_stg_mech_state_signal_is_active = 0.0,
+                  air_pos_cmd_is_active = 0.0, air_pos_is_closed = 0.0, air_pos_stg_mech_state_signal_is_active = 0.0,
+                  ams_err_is_active = 0.0, dcbus_is_over60_v = 0.0, dcbus_prech_rly_cmd_is_active = 0.0,
+                  dcbus_prech_rly_is_closed = 0.0, imd_err_is_active = 0.0, imp_dcbus_is_active = 0.0, imp_any_is_active = 0.0,
+                  imp_hv_relays_signals_is_active = 0.0, tsal_green_is_active = 1;
 
 
 /* USER CODE END PV */
@@ -200,38 +198,48 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim){
   }
 }
 void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan) {
-  if(hcan->Instance== CAN1){
-    CAN_RxHeaderTypeDef RxHeader;
-    if (HAL_CAN_GetRxMessage(hcan,CAN_RX_FIFO0,&RxHeader,buffer_rx)==HAL_OK){
-      if(RxHeader.StdId=MCB_TLB_BAT_SIGNALS_STATUS_FRAME_ID && RxHeader.DLC ==MCB_TLB_BAT_SIGNALS_STATUS_LENGTH){
-        struct mcb_tlb_bat_signals_status_t tlb_signals_rx;
-        if(mcb_tlb_bat_signals_status_unpack(&tlb_signals_rx,&buffer_rx,RxHeader.DLC)==0){
-          double air_pos_cmd_is_active = mcb_tlb_bat_signals_status_air_pos_cmd_is_active_decode(tlb_signals_rx.air_pos_cmd_is_active);
-          double air_pos_is_closed = mcb_tlb_bat_signals_status_air_pos_is_closed_decode(tlb_signals_rx.air_pos_is_closed);
-          double air_neg_cmd_is_active = mcb_tlb_bat_signals_status_air_neg_cmd_is_active_decode(tlb_signals_rx.air_neg_cmd_is_active);
-          double air_neg_is_closed = mcb_tlb_bat_signals_status_air_neg_is_closed_decode(tlb_signals_rx.air_neg_is_closed);
-          double dcbus_prech_rly_cmd_is_active = mcb_tlb_bat_signals_status_dcbus_prech_rly_cmd_is_active_decode(tlb_signals_rx.dcbus_prech_rly_cmd_is_active);
-          double dcbus_prech_rly_is_closed = mcb_tlb_bat_signals_status_dcbus_prech_rly_is_closed_decode(tlb_signals_rx.dcbus_prech_rly_is_closed);
-          double ams_err_is_active = mcb_tlb_bat_signals_status_ams_err_is_active_decode(tlb_signals_rx.ams_err_is_active);
-          double imd_err_is_active = mcb_tlb_bat_signals_status_imd_err_is_active_decode(tlb_signals_rx.imd_err_is_active);
-          double tsal_green_is_active = mcb_tlb_bat_signals_status_tsal_green_is_active_decode(tlb_signals_rx.tsal_green_is_active);
-          double dcbus_is_over60_v = mcb_tlb_bat_signals_status_dcbus_is_over60_v_decode(tlb_signals_rx.dcbus_is_over60_v);
-          double imp_any_is_active = mcb_tlb_bat_signals_status_imp_any_is_active_decode(tlb_signals_rx.imp_any_is_active);
-          double imp_hv_relays_state_is_active = mcb_tlb_bat_signals_status_imp_hv_relays_state_is_active_decode(tlb_signals_rx.imp_hv_relays_state_is_active);
-          double air_pos_stg_mech_state_signal_is_active = mcb_tlb_bat_signals_status_air_pos_stg_mech_state_signal_is_active_decode(tlb_signals_rx.air_pos_stg_mech_state_signal_is_active);
-          double air_neg_stg_mech_state_signal_is_active = mcb_tlb_bat_signals_status_air_neg_stg_mech_state_signal_is_active_decode(tlb_signals_rx.air_neg_stg_mech_state_signal_is_active);
-          double imp_dcbus_is_active= mcb_tlb_bat_signals_status_imp_ai_rs_signals_is_active_decode(tlb_signals_rx.imp_dcbus_is_active);
-          
+    if (hcan->Instance == CAN1) {
+        CAN_RxHeaderTypeDef RxHeader;
+        if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, buffer_rx) == HAL_OK) {
+            if (RxHeader.StdId == MCB_TLB_BAT_SIGNALS_STATUS_FRAME_ID && RxHeader.DLC == MCB_TLB_BAT_SIGNALS_STATUS_LENGTH) {
+                struct mcb_tlb_bat_signals_status_t tlb_signals_rx;
+                if (mcb_tlb_bat_signals_status_unpack(&tlb_signals_rx, &buffer_rx, RxHeader.DLC) == 0) {
+                    double air_pos_cmd_is_active = mcb_tlb_bat_signals_status_air_pos_cmd_is_active_decode(tlb_signals_rx.air_pos_cmd_is_active);
+                    double air_pos_is_closed = mcb_tlb_bat_signals_status_air_pos_is_closed_decode(tlb_signals_rx.air_pos_is_closed);
+                    double air_neg_cmd_is_active = mcb_tlb_bat_signals_status_air_neg_cmd_is_active_decode(tlb_signals_rx.air_neg_cmd_is_active);
+                    double air_neg_is_closed = mcb_tlb_bat_signals_status_air_neg_is_closed_decode(tlb_signals_rx.air_neg_is_closed);
+                    double dcbus_prech_rly_cmd_is_active = mcb_tlb_bat_signals_status_dcbus_prech_rly_cmd_is_active_decode(tlb_signals_rx.dcbus_prech_rly_cmd_is_active);
+                    double dcbus_prech_rly_is_closed = mcb_tlb_bat_signals_status_dcbus_prech_rly_is_closed_decode(tlb_signals_rx.dcbus_prech_rly_is_closed);
+                    double ams_err_is_active = mcb_tlb_bat_signals_status_ams_err_is_active_decode(tlb_signals_rx.ams_err_is_active);
+                    double imd_err_is_active = mcb_tlb_bat_signals_status_imd_err_is_active_decode(tlb_signals_rx.imd_err_is_active);
+                    double tsal_green_is_active = mcb_tlb_bat_signals_status_tsal_green_is_active_decode(tlb_signals_rx.tsal_green_is_active);
+                    double dcbus_is_over60_v = mcb_tlb_bat_signals_status_dcbus_is_over60_v_decode(tlb_signals_rx.dcbus_is_over60_v);
+                    double imp_any_is_active = mcb_tlb_bat_signals_status_imp_any_is_active_decode(tlb_signals_rx.imp_any_is_active);
+                    double imp_hv_relays_state_is_active = mcb_tlb_bat_signals_status_imp_hv_relays_state_is_active_decode(tlb_signals_rx.imp_hv_relays_state_is_active);
+                    double air_pos_stg_mech_state_signal_is_active = mcb_tlb_bat_signals_status_air_pos_stg_mech_state_signal_is_active_decode(tlb_signals_rx.air_pos_stg_mech_state_signal_is_active);
+                    double air_neg_stg_mech_state_signal_is_active = mcb_tlb_bat_signals_status_air_neg_stg_mech_state_signal_is_active_decode(tlb_signals_rx.air_neg_stg_mech_state_signal_is_active);
+                    double imp_dcbus_is_active = mcb_tlb_bat_signals_status_imp_dcbus_is_active_decode(tlb_signals_rx.imp_dcbus_is_active);
 
-        //uart for debugging:
-        char msg[256];
-        //HAL_UART_Transmit_IT();
+                    // Comparing buffer_tx and buffer_rx to check if transmission was successful
+                    int buffer_match = 1; // Initialize match flag
+                    for (int i = 0; i < RxHeader.DLC; i++) {
+                        if (buffer_tx[i] != buffer_rx[i]) {
+                            buffer_match = 0; // Mismatch detected
+                            break;
+                        }
+                    }
+                    // Handle buffer match or mismatch
+                    if (buffer_match) {
+                        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_SET); // Turn LED ON if match
+                    } else {
+                        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_5, GPIO_PIN_RESET); // Turn LED OFF if mismatch
+                    }
+                }
+            }
         }
-      }
     }
-
-  }
 }
+
 
 void HAL_CAN_RxFifo1MsgPendingCallback(CAN_HandleTypeDef *);
 void HAL_CAN_RxFifo0FullCallback(CAN_HandleTypeDef *);
